@@ -50,6 +50,7 @@
 #include <vfs.h>
 #include <synch.h>
 #include <kern/fcntl.h>  
+#include "opt-A2.h"
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -68,6 +69,35 @@ static struct semaphore *proc_count_mutex;
 /* used to signal the kernel menu thread when there are no processes */
 struct semaphore *no_proc_sem;   
 #endif  // UW
+
+
+/* =============== OPT_A2 ===================*/
+#if OPT_A2
+
+struct array * reusable;
+struct array * running;
+
+struct locks * lockers;
+
+pid_t count;
+
+struct process * process_init(pid_t p_pid, pid_t c_pid) {
+    // malloc
+    struct process * p = kmalloc(sizeof(*p));
+    
+    // init
+    p->parent_pid = p_pid;
+    p->child_pid = c_pid;
+    p->parent = true;
+    p->child = true;
+    p->exitcode = 0;
+    
+    // return
+    return p;
+}
+
+#endif
+/* =============== OPT_A2 ===================*/
 
 
 
@@ -194,6 +224,15 @@ void
 proc_bootstrap(void)
 {
   kproc = proc_create("[kernel]");
+/* =============== OPT_A2 ===================*/
+    
+#if OPT_A2
+    kproc->p_pid = 1;
+
+#endif
+    
+/* =============== OPT_A2 ===================*/
+    
   if (kproc == NULL) {
     panic("proc_create for kproc failed\n");
   }
@@ -203,6 +242,28 @@ proc_bootstrap(void)
   if (proc_count_mutex == NULL) {
     panic("could not create proc_count_mutex semaphore\n");
   }
+    
+/* =============== OPT_A2 ===================*/
+    
+#if OPT_A2
+    
+    // init count
+    count = 1;
+    
+    // create locker
+    lockers = kmalloc(sizeof(*lockers));
+  	lockers->reusable_sem = sem_create("reusable sem",1);
+  	lockers->running_lk = lock_create("running lk");
+  	lockers->waiting_cv = cv_create("waiting cv");
+    
+    // create arrays
+    reusable = array_create();
+    running = array_create();
+    
+#endif
+    
+/* =============== OPT_A2 ===================*/
+    
   no_proc_sem = sem_create("no_proc_sem",0);
   if (no_proc_sem == NULL) {
     panic("could not create no_proc_sem semaphore\n");
@@ -269,6 +330,31 @@ proc_create_runprogram(const char *name)
 	P(proc_count_mutex); 
 	proc_count++;
 	V(proc_count_mutex);
+    
+    /* =============== OPT_A2 ===================*/
+#if OPT_A2
+    
+    // sem acquire
+    P(lockers->reusable_sem);
+    
+    int r = array_num(reusable);
+    // if none resuable proc
+    if (r == 0) {
+        count += 1;
+        proc->p_pid = count;
+    // if there is resuable proc
+    } else {
+        proc->p_pid = *((pid_t *) array_get(reusable, 0));
+        kfree(array_get(reusable, 0));
+        array_remove(reusable, 0);
+    }
+    
+    // sem release
+    V(lockers->reusable_sem);
+    
+#endif
+    /* =============== OPT_A2 ===================*/
+    
 #endif // UW
 
 	return proc;

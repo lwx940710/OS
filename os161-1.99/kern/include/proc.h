@@ -39,11 +39,40 @@
 #include <spinlock.h>
 #include <thread.h> /* required for struct threadarray */
 
+#include "opt-A2.h"
+#include <array.h>
+
 struct addrspace;
 struct vnode;
 #ifdef UW
 struct semaphore;
 #endif // UW
+
+/* =============== OPT_A2 ===================*/
+#if OPT_A2
+
+struct array * reusable;
+struct array * running;
+pid_t count;
+struct locks * lockers;
+
+struct locks
+{
+  struct semaphore * reusable_sem;
+  struct lock * running_lk;
+  struct cv * waiting_cv; 
+};
+
+struct process {
+    pid_t parent_pid;
+    pid_t child_pid;
+    bool parent;
+    bool child;
+    int exitcode;
+};
+
+#endif
+/* =============== OPT_A2 ===================*/
 
 /*
  * Process structure.
@@ -58,6 +87,14 @@ struct proc {
 
 	/* VFS */
 	struct vnode *p_cwd;		/* current working directory */
+    
+/* =============== OPT_A2 ===================*/
+#if OPT_A2
+    
+    pid_t p_pid;
+    
+#endif
+/* =============== OPT_A2 ===================*/
 
 #ifdef UW
   /* a vnode to refer to the console device */
@@ -70,6 +107,8 @@ struct proc {
 
 	/* add more material here as needed */
 };
+
+
 
 /* This is the process structure for the kernel and for kernel-only threads. */
 extern struct proc *kproc;
@@ -100,5 +139,12 @@ struct addrspace *curproc_getas(void);
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *curproc_setas(struct addrspace *);
 
+/* =============== OPT_A2 ===================*/
+#if OPT_A2
+
+struct process * process_init(pid_t p_pid, pid_t c_pid);
+
+#endif
+/* =============== OPT_A2 ===================*/
 
 #endif /* _PROC_H_ */
